@@ -30,5 +30,7 @@ app.get('/', (req: Request, res: Response) => {
 // Start server via httpServer instead of app.listen
 httpServer.listen(port, () => {
     console.log(`Server is running on port ${port}`);
-    initSocket(httpServer);
+  //  initSocket(httpServer);
+console.log("Socket disabled for deployment");
+
 });
