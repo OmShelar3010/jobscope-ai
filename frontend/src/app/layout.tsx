@@ -1,0 +1,47 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import { AuthProvider } from "../context/AuthContext";
+import { SocketProvider } from "../context/SocketContext";
+import Navbar from "../components/Navbar";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "JobScope AI",
+  description: "AI-powered job recommendation platform",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100 min-h-screen`}
+      >
+        <AuthProvider>
+          <SocketProvider>
+            <Navbar />
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {children}
+            </main>
+            <ToastContainer position="top-right" autoClose={5000} />
+          </SocketProvider>
+        </AuthProvider>
+      </body>
+    </html>
+  );
+}
