@@ -2,42 +2,51 @@
 import { Button } from "./Button";
 
 interface JobCardProps {
+    id: string;
     title: string;
     company: string;
     location: string;
     type: string;
     postedAt: string;
-    logoUrl?: string;
-    id: string;
-    redirectUrl: string;   // ✅ ADD THIS
+    logoUrl?: string;        // ✅ make optional
+    redirectUrl?: string;    // already optional
 }
 
 
 
+
+
 export default function JobCard({
+    id,
     title,
     company,
     location,
     type,
     postedAt,
     logoUrl,
-    id
+    redirectUrl = "#",   // ✅ ADD THIS
 }: JobCardProps) {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow transition-shadow">
             <div className="flex gap-4">
                 <div className="flex-shrink-0">
                     {logoUrl ? (
-                        <img src={logoUrl} alt={`${company} logo`} className="w-12 h-12 object-contain rounded" />
+                        <img
+                            src={logoUrl}
+                            alt={`${company} logo`}
+                            className="w-12 h-12 object-contain rounded"
+                        />
                     ) : (
-                        <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-500 font-bold text-lg">
+                        <div className="w-12 h-12 flex items-center justify-center bg-blue-100 text-blue-600 rounded font-bold">
                             {company.charAt(0)}
                         </div>
                     )}
+
                 </div>
                 <div className="flex-1">
                     <a
-                        href={redirectUrl}
+                        href={redirectUrl || "#"}
+
                         target="_blank"
                         rel="noopener noreferrer"
                         className="hover:underline decoration-primary"
