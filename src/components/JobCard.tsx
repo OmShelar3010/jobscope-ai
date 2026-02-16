@@ -1,4 +1,4 @@
-import Link from "next/link";
+
 import { Button } from "./Button";
 
 interface JobCardProps {
@@ -9,7 +9,10 @@ interface JobCardProps {
     postedAt: string;
     logoUrl?: string;
     id: string;
+    redirectUrl: string;   // ✅ ADD THIS
 }
+
+
 
 export default function JobCard({
     title,
@@ -33,9 +36,16 @@ export default function JobCard({
                     )}
                 </div>
                 <div className="flex-1">
-                    <Link href={`/jobs/${id}`} className="hover:underline decoration-primary">
+                    <a
+                        href={redirectUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline decoration-primary"
+                    >
                         <h3 className="font-semibold text-primary text-lg leading-tight">{title}</h3>
-                    </Link>
+                    </a>
+
+
                     <div className="text-sm text-gray-900 mt-1">{company}</div>
                     <div className="text-sm text-gray-500 mt-0.5">
                         {location} · <span className="text-green-600 font-medium">{type}</span>

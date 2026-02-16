@@ -12,7 +12,9 @@ interface Job {
     location: string;
     description: string;
     posted_at: string;
+    redirect_url: string;  // ✅ ADD THIS
 }
+
 
 export default function RecommendedPage() {
     const [skills, setSkills] = useState("");
@@ -44,7 +46,9 @@ export default function RecommendedPage() {
                     location: job.location?.display_name || "Unknown Location",
                     description: job.description || "",
                     posted_at: job.created || new Date().toISOString(),
+                    redirect_url: job.redirect_url || "#",  // ✅ ADD THIS LINE
                 }));
+
 
                 setJobs(formattedJobs);
             } else {
@@ -129,9 +133,11 @@ export default function RecommendedPage() {
                                     title={job.title}
                                     company={job.company}
                                     location={job.location}
-                                    type="Full-time" // Placeholder as our schema didn't have type
+                                    type="Full-time"
                                     postedAt={new Date(job.posted_at).toLocaleDateString()}
+                                    redirectUrl={job.redirect_url}   // ✅ ADD THIS
                                 />
+
                             ))}
 
                             {!hasSearched && (
