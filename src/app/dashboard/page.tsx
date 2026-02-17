@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function Dashboard() {
+  const router = useRouter();
   const [user, setUser] = useState<{ email?: string } | null>(null);
   const [profile, setProfile] = useState<{ name?: string; bio?: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+
 
   useEffect(() => {
     const loadData = async () => {
@@ -96,6 +97,7 @@ export default function Dashboard() {
           >
             Edit Profile
           </button>
+
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -113,6 +115,7 @@ export default function Dashboard() {
           >
             Start Applying
           </button>
+
         </div>
       </div>
     </div>
