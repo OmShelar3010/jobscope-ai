@@ -27,12 +27,14 @@ export default function Navbar() {
     router.push("/login");
   };
 
-  const items = [
-    { label: "Home", href: "/" },
-    { label: "Jobs", href: "/jobs" },
-    { label: "Recommended", href: "/recommended" },
-    { label: "Profile", href: "/profile" },
-  ];
+const items = [
+  { label: "Home", href: "/" },
+  { label: "Jobs", href: "/jobs" },
+  { label: "Recommended", href: "/recommended" },
+  { label: "Resume Analyzer", href: "/resume" }, // 🔥 Added
+  { label: "Profile", href: "/profile" },
+];
+
 
   const activeIndex =
     items.findIndex((item) => item.href === pathname) !== -1
@@ -80,6 +82,7 @@ export default function Navbar() {
             >
               Login
             </Link>
+            
           )}
         </div>
       </div>
