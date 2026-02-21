@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import ApplicationChart from "@/components/ApplicationChart";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import AIMatchCircle from "@/components/AIMatchCircle";
 
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ email?: string } | null>(null);
   const [profile, setProfile] = useState<{ name?: string; bio?: string } | null>(null);
   const [loading, setLoading] = useState(true);
-
+const [atsScore, setAtsScore] = useState<number>(0)
 
   useEffect(() => {
     const loadData = async () => {
@@ -73,8 +75,47 @@ export default function Dashboard() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard title="Profile Views" value="42" />
         <StatCard title="Applications" value="0" />
-        <StatCard title="AI Match Score" value="78%" />
+        <StatCard
+          title="AI Match Score"
+          value={atsScore !== null ? `${atsScore}%` : "0%"}
+        />
         <StatCard title="Saved Jobs" value="3" />
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid gap-6 lg:grid-cols-3 mb-8">
+        <div className="lg:col-span-2">
+          <ApplicationChart />
+        </div>
+      <AIMatchCircle score={atsScore} />
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+        <h2 className="text-xl font-semibold text-slate-800 mb-4">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+            <h2 className="text-xl font-semibold text-slate-800 mb-4">
+              📄 Resume Analyzer
+            </h2>
+
+            <Link
+              href="/resume"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+            >
+              Analyze Resume
+            </Link>
+          </div> 🔥 Skills In Demand
+        </h2>
+
+        <div className="flex flex-wrap gap-3">
+          {["React", "Node.js", "AI/ML", "Docker", "AWS"].map((skill) => (
+            <span
+              key={skill}
+              className="px-4 py-1 bg-blue-100 text-blue-700 text-sm rounded-full"
+            >
+              {skill}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* MAIN GRID */}
@@ -124,9 +165,11 @@ export default function Dashboard() {
 
 function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition">
       <p className="text-sm text-slate-500">{title}</p>
-      <p className="text-3xl font-bold text-blue-600 mt-2">{value}</p>
+      <p className="text-3xl font-bold text-blue-600 mt-2">
+        {value}
+      </p>
     </div>
   );
 }

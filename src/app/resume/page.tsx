@@ -33,6 +33,11 @@ export default function ResumePage() {
 
             const data = await res.json()
             setResult(data)
+
+            // ✅ SAVE ATS SCORE FOR DASHBOARD
+            if (data?.score !== undefined) {
+                localStorage.setItem("atsScore", data.score.toString())
+            }
         } catch (error) {
             console.error(error)
             alert("Something went wrong. Check console.")

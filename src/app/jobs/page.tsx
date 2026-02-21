@@ -10,12 +10,24 @@ export default function Jobs() {
   const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [datePosted, setDatePosted] = useState("");
+  const [contractType, setContractType] = useState("");
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [companyFilter, setCompanyFilter] = useState("");
+
   const fetchJobs = async (search = "developer", loc = "india") => {
     try {
       setLoading(true);
-      const res = await fetch(
-        `/api/jobs?what=${search}&where=${loc}`
-      );
+      const query = new URLSearchParams({
+        what: search,
+        where: loc,
+        date_posted: datePosted,
+        contract_type: contractType,
+        company: companyFilter,
+        remote: remoteOnly ? "1" : "",
+      });
+
+      const res = await fetch(`/api/jobs?${query.toString()}`);
       const data = await res.json();
 
       const formattedJobs = data.map((job: any) => ({
@@ -42,6 +54,10 @@ export default function Jobs() {
   useEffect(() => {
     fetchJobs();
   }, []);
+
+  useEffect(() => {
+    fetchJobs(keyword || "developer", location || "india");
+  }, [datePosted, contractType, remoteOnly, companyFilter]);
 
   const handleSearch = () => {
     fetchJobs(keyword || "developer", location || "india");
@@ -79,7 +95,7 @@ export default function Jobs() {
 
             <button
               onClick={handleSearch}
-              className="bg-primary text-white font-bold py-2 px-6 rounded-full"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md transition-colors duration-200 shadow-sm"
             >
               Search
             </button>
