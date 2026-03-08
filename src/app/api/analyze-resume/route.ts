@@ -3,7 +3,155 @@ export const runtime = "nodejs"
 import { NextResponse } from "next/server"
 import mammoth from "mammoth"
 import PDFParser from "pdf2json"
+import Groq from "groq-sdk"
 
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+
+// ─── PDF Parsing ───────────────────────────────────────────────────────────
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const parser = new PDFParser(null, true)
+
+    parser.on("pdfParser_dataReady", () => {
+      try {
+        const text = (parser as any).getRawTextContent()
+        resolve(text)
+      } catch {
+        reject(new Error("Failed to extract PDF text"))
+      }
+    })
+
+    parser.on("pdfParser_dataError", (err: any) => {
+      reject(new Error(`PDF parse error: ${err?.parserError ?? err}`))
+    })
+
+    parser.parseBuffer(buffer)
+  })
+}
+
+// ─── Skill keyword matching ────────────────────────────────────────────────
+const skillCategories: Record<string, string[]> = {
+  frontend: ["react", "nextjs", "vue", "angular", "html", "css", "tailwind"],
+  backend: ["node", "express", "django", "spring", "php"],
+  database: ["mongodb", "mysql", "postgresql", "sql"],
+  devops: ["docker", "aws", "kubernetes", "ci/cd"],
+  languages: ["python", "java", "c++", "javascript", "typescript"],
+}
+
+const skillAliases: Record<string, string[]> = {
+  javascript: ["js"],
+  typescript: ["ts"],
+  postgresql: ["postgres", "pg"],
+  node: ["nodejs", "node.js"],
+  nextjs: ["next.js"],
+  "c++": ["cpp"],
+}
+
+function escapeRegex(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function matchesSkill(text: string, skill: string): boolean {
+  const patterns = [skill, ...(skillAliases[skill] ?? [])]
+  return patterns.some((p) =>
+    new RegExp(`\\b${escapeRegex(p)}\\b`, "i").test(text)
+  )
+}
+
+function runKeywordAnalysis(text: string) {
+  const foundSkills: string[] = []
+  const missingSkills: string[] = []
+  const categoryScores: Record<string, number> = {}
+
+  for (const [category, skills] of Object.entries(skillCategories)) {
+    const found = skills.filter((s) => matchesSkill(text, s))
+    categoryScores[category] = Math.round((found.length / skills.length) * 100)
+    foundSkills.push(...found)
+    missingSkills.push(...skills.filter((s) => !found.includes(s)))
+  }
+
+  return { foundSkills, missingSkills, categoryScores }
+}
+
+// ─── Groq AI Analysis ─────────────────────────────────────────────────────
+interface AiAnalysis {
+  overallScore: number
+  jobMatchPercent: number
+  strengths: string[]
+  suggestions: string[]
+  missingKeywords: string[]
+  tone: string
+  summary: string
+}
+
+async function analyzeWithGroq(
+  resumeText: string,
+  jobDescription: string | null
+): Promise<AiAnalysis> {
+  const jobSection = jobDescription
+    ? `Job Description:\n"""\n${jobDescription.slice(0, 2000)}\n"""\n`
+    : "No job description was provided.\n"
+
+  const prompt = `You are an expert ATS (Applicant Tracking System) and career coach.
+
+Analyze the resume below against the job description (if provided) and return a JSON object — no markdown, no explanation, just raw JSON.
+
+${jobSection}
+Resume:
+"""
+${resumeText.slice(0, 4000)}
+"""
+
+Return this exact JSON shape:
+{
+  "overallScore": <integer 0-100, honest ATS-readiness score>,
+  "jobMatchPercent": <integer 0-100, how well the resume matches the job description; 0 if no JD provided>,
+  "strengths": [<up to 4 short bullet strings highlighting what the resume does well>],
+  "suggestions": [<up to 5 actionable improvement tips, be specific>],
+  "missingKeywords": [<keywords from the JD not found in the resume; empty array if no JD>],
+  "tone": "<one of: Professional | Semi-professional | Too casual | Too verbose | Lacks detail>",
+  "summary": "<2-sentence plain-English summary of the candidate's profile>"
+}
+
+Scoring guide:
+- 80-100: Strong resume, well-structured, quantified achievements, good keyword alignment
+- 60-79: Decent but missing quantification or some key skills
+- 40-59: Needs significant improvement in structure or content
+- 0-39: Major gaps, too short, or very poor formatting`
+
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    max_tokens: 1000,
+    messages: [{ role: "user", content: prompt }],
+  })
+
+  const raw = (completion.choices[0]?.message?.content ?? "")
+    .replace(/```json|```/g, "")
+    .trim()
+
+  return JSON.parse(raw) as AiAnalysis
+}
+
+// ─── Final score blending ──────────────────────────────────────────────────
+function blendScores(
+  aiScore: number,
+  categoryScores: Record<string, number>,
+  hasNumbers: boolean,
+  hasSections: boolean
+): number {
+  const avgCategory =
+    Object.values(categoryScores).reduce((a, b) => a + b, 0) /
+    Object.keys(categoryScores).length
+
+  let score = aiScore * 0.6
+  score += avgCategory * 0.25
+  score += hasNumbers ? 10 : 0
+  score += hasSections ? 5 : 0
+
+  return Math.min(100, Math.round(score))
+}
+
+// ─── Route Handler ─────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
     const formData = await req.formData()
@@ -11,148 +159,67 @@ export async function POST(req: Request) {
     const jobDescription = formData.get("jobDescription")
 
     if (!file || !(file instanceof File)) {
-      return NextResponse.json(
-        { error: "No file uploaded" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
     let text = ""
 
     if (file.type === "application/pdf") {
-      const arrayBuffer = await file.arrayBuffer()
-      text = Buffer.from(arrayBuffer).toString("utf8")
+      text = await extractPdfText(buffer)
     } else {
       const data = await mammoth.extractRawText({ buffer })
-      text = data.value || ""
-    }
-    console.log("Extracted text length:", text.length)
-    console.log("Extracted text preview:", text.slice(0, 300))
-    // 🔥 keep your existing analysis logic below
-
-    const cleanText = text.toLowerCase()
-
-    // ✅ Skill Categories
-    const skillCategories: Record<string, string[]> = {
-      frontend: ["react", "nextjs", "vue", "angular", "html", "css", "tailwind"],
-      backend: ["node", "express", "django", "spring", "php"],
-      database: ["mongodb", "mysql", "postgresql", "sql"],
-      devops: ["docker", "aws", "kubernetes", "ci/cd"],
-      languages: ["python", "java", "c++", "javascript", "typescript"],
+      text = data.value ?? ""
     }
 
-    const skillAliases: Record<string, string[]> = {
-      javascript: ["js"],
-      typescript: ["ts"],
-      postgresql: ["postgres", "pg"],
-      node: ["nodejs", "node.js"],
-      nextjs: ["next.js"],
-      "c++": ["cpp"]
-    }
-    function escapeRegex(str: string) {
-      return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    }
-    const matchesSkill = (skill: string): boolean => {
-      const patterns = [skill, ...(skillAliases[skill] || [])]
-
-      return patterns.some((pattern) => {
-        const safePattern = escapeRegex(pattern)
-        return new RegExp(`\\b${safePattern}\\b`, "i").test(text)
-      })
-    }
-
-    const foundSkills: string[] = []
-    const missingSkills: string[] = []
-    const categoryScores: Record<string, number> = {}
-
-    Object.entries(skillCategories).forEach(([category, skills]) => {
-      const found = skills.filter((skill) => matchesSkill(skill))
-      const percent = Math.round((found.length / skills.length) * 100)
-
-      categoryScores[category] = percent
-      foundSkills.push(...found)
-      missingSkills.push(...skills.filter((s) => !found.includes(s)))
-    })
-
-    // ✅ Section detection
-    const hasEducation = /\beducation\b/i.test(text)
-    const hasExperience = /\bexperience\b/i.test(text)
-    const hasProjects = /\bproject\b/i.test(text)
-    const hasNumbers = /\d+/.test(text)
-
-    // ✅ Job Matching
-    let jobMatchPercent = 0
-
-    if (typeof jobDescription === "string" && jobDescription.length > 0) {
-      const jobWords = jobDescription
-        .toLowerCase()
-        .split(/\W+/)
-        .filter((word) => word.length > 3)
-
-      const resumeWords = cleanText.split(/\W+/)
-
-      const matched = jobWords.filter((word) =>
-        resumeWords.includes(word)
+    if (!text || text.trim().length < 50) {
+      return NextResponse.json(
+        { error: "Could not extract readable text from the file." },
+        { status: 422 }
       )
-
-      jobMatchPercent =
-        jobWords.length > 0
-          ? Math.round((matched.length / jobWords.length) * 100)
-          : 0
     }
 
-    // ✅ ATS Scoring
-    let score = 0
+    const jd =
+      typeof jobDescription === "string" && jobDescription.length > 0
+        ? jobDescription
+        : null
 
-    const averageCategoryScore =
-      Object.values(categoryScores).reduce((a, b) => a + b, 0) /
-      Object.keys(categoryScores).length
+    const [keywordResult, aiAnalysis] = await Promise.all([
+      Promise.resolve(runKeywordAnalysis(text)),
+      analyzeWithGroq(text, jd),
+    ])
 
-    score += averageCategoryScore * 0.4
-    score += jobMatchPercent * 0.3
+    const hasNumbers = /\d+/.test(text)
+    const hasSections =
+      /\beducation\b/i.test(text) ||
+      /\bexperience\b/i.test(text) ||
+      /\bproject/i.test(text)
 
-    let sectionScore = 0
-    if (hasEducation) sectionScore += 5
-    if (hasExperience) sectionScore += 5
-    if (hasProjects) sectionScore += 5
-    score += sectionScore
+    const finalScore = blendScores(
+      aiAnalysis.overallScore,
+      keywordResult.categoryScores,
+      hasNumbers,
+      hasSections
+    )
 
-    if (hasNumbers) score += 15
-
-    score = Math.min(100, Math.round(score))
-
-    const suggestions: string[] = []
-
-    if (!hasNumbers)
-      suggestions.push("Add measurable achievements with numbers.")
-
-    if (!hasProjects)
-      suggestions.push("Include a Projects section.")
-
-    if (jobMatchPercent < 50 && jobDescription)
-      suggestions.push("Improve alignment with job description.")
-
-    if (averageCategoryScore < 40)
-      suggestions.push("Add more relevant technical skills.")
-
-    if (text.length < 600)
-      suggestions.push("Resume content is too short.")
+    const allMissing = Array.from(
+      new Set([...keywordResult.missingSkills, ...aiAnalysis.missingKeywords])
+    )
 
     return NextResponse.json({
-      score,
-      categoryScores,
-      foundSkills,
-      missingSkills,
-      suggestions,
-      jobMatchPercent
+      score: finalScore,
+      categoryScores: keywordResult.categoryScores,
+      foundSkills: keywordResult.foundSkills,
+      missingSkills: allMissing,
+      suggestions: aiAnalysis.suggestions,
+      jobMatchPercent: aiAnalysis.jobMatchPercent,
+      strengths: aiAnalysis.strengths,
+      tone: aiAnalysis.tone,
+      summary: aiAnalysis.summary,
+      aiScore: aiAnalysis.overallScore,
     })
-
   } catch (error) {
     console.error(error)
-    return NextResponse.json(
-      { error: "Analysis failed" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Analysis failed" }, { status: 500 })
   }
 }
